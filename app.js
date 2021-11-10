@@ -1,10 +1,11 @@
 import validUrl from 'valid-url';
 import express from 'express';
-import UrlSchema from './schema';
 import mongoose from 'mongoose';
 import 'dotenv/config';
 
 const app = express();
+const { model, Schema } = mongoose;
+const port = 3000;
 
 app.use(express.json());
 
@@ -19,8 +20,25 @@ mongoose.connect( dbUrl, {
     console.log('Connected to mongodb');
 })
 
+// mongoose schema
+const urlSchema = new Schema({
+    original_url: { type: String, required: true },
+    short_url: { type: String, required: true },
+    generated_id: { type: String, required: true }
+}, { timestamps: true });
+
+const UrlSchema = model('UrlSchema', urlSchema);
+
 // to generate a unique string
-const generateUniqueId = () => Math.random().toString(32).substr(2, 8);
+const generateUniqueId = async() => {
+  const generatedId = Math.random().toString(32).substr(2, 8);
+  const existingId = await UrlSchema.findOne({generated_id:generatedId});
+  if(existingId){
+    return generateUniqueId();
+  }else{
+    return generatedId;
+  }
+}
 
 // checks if the url inputted is a valid url
 const checkIfUrlIsValid = (req, res, next) => {
@@ -44,8 +62,8 @@ const checkIfUrlExists = async (req, res, next) => {
 // shortens the url
 const createShortUrl = async (req, res) => {
     try {
-      const id = generateUniqueId();
-      const shortUrl = `http://localhost:3000/${id}`;
+      const id = await generateUniqueId();
+      const shortUrl = `http://localhost:${port}/${id}`;
       const newUrl = new UrlSchema({ original_url: req.body.url, short_url: shortUrl, generated_id: id });
       await newUrl.save();
       return res.status(201).json({
@@ -68,4 +86,4 @@ const findUrl = async (req, res) => {
 app.post("/shorten", checkIfUrlIsValid, checkIfUrlExists, createShortUrl);
 app.get("/:urlId", findUrl);
 
-app.listen(3000, () => console.log(`Listening on port ${3000}`));
+app.listen(port, () => console.log(`Listening on port ${port}`));
